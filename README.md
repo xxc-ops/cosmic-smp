@@ -1,0 +1,2 @@
+# cosmic-smp
+meu server
