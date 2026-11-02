@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>ABISMO — Terror Submarino</title>
+<style>
+  /* ═══════════ RESET & BASE ═══════════ */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    width:100%; height:100%; overflow:hidden;
+    background:#000;
+    touch-action:none; user-select:none; -webkit-user-select:none;
+    font-family:'Courier New', monospace;
+    color:#9fe8ff;
+    overscroll-behavior:none;
+    position:fixed;
+  }
+  #game-canvas { position:fixed; inset:0; display:block; }
+
+  /* ═══════════ VINHETA CSS ═══════════ */
+  #vignette {
+    position:fixed; inset:0; pointer-events:none; z-index:5;
+    background:radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.75) 100%);
+    transition:opacity 0.5s;
+  }
+
+  /* ═══════════ FLASH DE TELA ═══════════ */
+  #flash {
+    position:fixed; inset:0; pointer-events:none; z-index:6;
+    background:#fff; opacity:0; transition:opacity 0.08s;
+  }
+
+  /* ═══════════ HUD ═══════════ */
+  #hud {
+    position:fixed; top:calc(10px + env(safe-area-inset-top));
+    left:calc(12px + env(safe-area-inset-left));
+    z-index:10; pointer-events:none;
+    display:none;
+  }
+  .bar-row { display:flex; align-items:center; margin-bottom:6px; }
+  .bar-label {
+    font-size:10px; letter-spacing:2px; width:70px;
+    text-shadow:0 0 6px rgba(159,232,255,0.6);
+  }
+  .bar-bg {
+    width:120px; height:10px; background:rgba(0,20,30,0.7);
+    border:1px solid rgba(159,232,255,0.35); border-radius:2px;
+    overflow:hidden;
+  }
+  .bar-fill {
+    height:100%; border-radius:1px;
+    transition:width 0.3s linear;
+  }
+  #oxy-fill { background:linear-gradient(90deg,#0a6a8a,#3ecfff); width:100%; }
+  #san-fill { background:linear-gradient(90deg,#5a2a8a,#c86aff); width:100%; }
+  #relic-counter {
+    margin-top:8px; font-size:12px; letter-spacing:3px;
+    text-shadow:0 0 8px rgba(159,232,255,0.8);
+  }
+  #depth-meter {
+    margin-top:4px; font-size:10px; opacity:0.6; letter-spacing:2px;
+  }
+
+  /* ═══════════ BOTÕES DE CONTROLE ═══════════ */
+  .ctrl-btn {
+    position:fixed; z-index:20;
+    background:rgba(0,30,45,0.55);
+    border:2px solid rgba(159,232,255,0.4);
+    border-radius:50%;
+    color:#9fe8ff;
+    font-family:'Courier New', monospace;
+    display:flex; align-items:center; justify-content:center;
+    text-shadow:0 0 8px rgba(159,232,255,0.7);
+    backdrop-filter:blur(2px);
+    -webkit-tap-highlight-color:transparent;
+    touch-action:none;
+  }
+  .ctrl-btn:active { background:rgba(60,180,220,0.35); }
+
+  #btn-run {
+    width:90px; height:90px;
+    right:calc(20px + env(safe-area-inset-right));
+    bottom:calc(28px + env(safe-area-inset-bottom));
+    font-size:13px; letter-spacing:2px; font-weight:bold;
+  }
+  #btn-lantern {
+    width:60px; height:60px;
+    right:calc(16px + env(safe-area-inset-right));
+    top:calc(12px + env(safe-area-inset-top));
+    font-size:20px;
+  }
+  #btn-lantern.off { opacity:0.4; border-color:rgba(159,232,255,0.15); }
+
+  /* ═══════════ JOYSTICK ═══════════ */
+  #joystick-zone {
+    position:fixed; z-index:15;
+    left:0; bottom:0;
+    width:45%; height:55%;
+    touch-action:none;
+  }
+  #joystick-base {
+    position:absolute;
+    width:110px; height:110px;
+    border-radius:50%;
+    border:2px solid rgba(159,232,255,0.25);
+    background:rgba(0,20,35,0.3);
+    display:none;
+    pointer-events:none;
+  }
+  #joystick-knob {
+    position:absolute;
+    width:48px; height:48px;
+    border-radius:50%;
+    background:rgba(159,232,255,0.35);
+    border:2px solid rgba(159,232,255,0.6);
+    display:none;
+    pointer-events:none;
+  }
+
+  /* ═══════════ ÁREA DE LOOK ═══════════ */
+  #look-zone {
+    position:fixed; z-index:14;
+    right:0; top:0;
+    width:55%; height:100%;
+    touch-action:none;
+  }
+
+  /* ═══════════ INDICADOR DE DIREÇÃO ═══════════ */
+  #dir-indicator {
+    position:fixed; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    z-index:9; pointer-events:none;
+    display:none;
+    font-size:28px; color:#ffe066;
+    text-shadow:0 0 12px rgba(255,224,102,0.9);
+    animation:pulse-dir 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse-dir { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+  /* ═══════════ TELAS ═══════════ */
+  .screen {
+    position:fixed; inset:0; z-index:50;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at 50% 60%, #02101c 0%, #000 80%);
+    text-align:center; padding:24px;
+  }
+  .screen h1 {
+    font-size:clamp(36px, 10vw, 64px);
+    letter-spacing:12px; color:#9fe8ff;
+    text-shadow:0 0 20px rgba(60,200,255,0.8), 0 0 60px rgba(60,200,255,0.3);
+    margin-bottom:12px;
+    animation:title-glow 3s ease-in-out infinite;
+  }
+  @keyframes title-glow {
+    0%,100%{ text-shadow:0 0 20px rgba(60,200,255,0.8),0 0 60px rgba(60,200,255,0.3); }
+    50%{ text-shadow:0 0 35px rgba(60,200,255,1),0 0 90px rgba(60,200,255,0.5); }
+  }
+  .screen h2 {
+    font-size:clamp(22px, 6vw, 36px);
+    letter-spacing:8px; margin-bottom:16px;
+  }
+  .screen p {
+    font-size:clamp(12px, 3.2vw, 15px);
+    line-height:1.9; max-width:420px;
+    opacity:0.85; margin-bottom:8px;
+  }
+  .screen .btn {
+    margin-top:28px;
+    padding:16px 48px;
+    font-size:clamp(14px, 4vw, 18px);
+    letter-spacing:4px;
+    font-family:'Courier New', monospace;
+    background:transparent;
+    color:#9fe8ff;
+    border:2px solid rgba(159,232,255,0.5);
+    border-radius:4px;
+    cursor:pointer;
+    text-shadow:0 0 10px rgba(159,232,255,0.8);
+    box-shadow:0 0 20px rgba(60,200,255,0.15), inset 0 0 20px rgba(60,200,255,0.05);
+    transition:all 0.3s;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+  }
+  .screen .btn:active {
+    background:rgba(60,200,255,0.15);
+    box-shadow:0 0 40px rgba(60,200,255,0.4);
+  }
+  #death-screen h2 { color:#ff4455; text-shadow:0 0 20px rgba(255,60,80,0.8); }
+  #win-screen h2 { color:#7dffb0; text-shadow:0 0 20px rgba(80,255,150,0.8); }
+  #death-reason { color:#ff8899; font-size:clamp(13px,3.5vw,16px); margin-top:6px; }
+
+  /* ═══════════ LOADING ═══════════ */
+  #loading {
+    position:fixed; inset:0; z-index:100;
+    background:#000;
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:16px;
+  }
+  #loading p { letter-spacing:4px; font-size:13px; opacity:0.6; animation:blink 1.4s infinite; }
+  @keyframes blink { 0%,100%{opacity:0.3} 50%{opacity:0.8} }
+
+  /* ═══════════ DESKTOP HINT ═══════════ */
+  #desktop-hint { display:none; margin-top:16px; font-size:11px; opacity:0.5; }
+  body.is-desktop #desktop-hint { display:block; }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <p>CALIBRANDO SONAR...</p>
+</div>
+
+<!-- CANVAS -->
+<canvas id="game-canvas"></canvas>
+
+<!-- VINHETA & FLASH -->
+<div id="vignette"></div>
+<div id="flash"></div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="bar-row">
+    <span class="bar-label">OXIGÊNIO</span>
+    <div class="bar-bg"><div class="bar-fill" id="oxy-fill"></div></div>
+  </div>
+  <div class="bar-row">
+    <span class="bar-label">SANIDADE</span>
+    <div class="bar-bg"><div class="bar-fill" id="san-fill"></div></div>
+  </div>
+  <div id="relic-counter">◈ RELÍQUIAS: 0/3</div>
+  <div id="depth-meter">PROFUNDIDADE: -847m</div>
+</div>
+
+<!-- INDICADOR DE DIREÇÃO -->
+<div id="dir-indicator">▲</div>
+
+<!-- CONTROLES TOUCH -->
+<div id="joystick-zone"></div>
+<div id="joystick-base"></div>
+<div id="joystick-knob"></div>
+<div id="look-zone"></div>
+<button class="ctrl-btn" id="btn-run">CORRER</button>
+<button class="ctrl-btn" id="btn-lantern">🔦</button>
+
+<!-- TELA INICIAL -->
+<div class="screen" id="start-screen">
+  <h1>ABISMO</h1>
+  <p>— terror submarino —</p>
+  <p style="margin-top:20px">Você mergulhou sozinho até o fundo do oceano.<br>
+  Algo antigo habita estas águas.</p>
+  <p>◈ Colete as <b>3 relíquias</b> espalhadas nos destroços<br>
+  ◈ Volte ao ponto de partida<br>
+  ◈ Não olhe para trás. Não pare de nadar.</p>
+  <p id="touch-instructions">🕹️ Joystick esquerdo: mover<br>
+  👆 Arraste à direita: olhar<br>
+  🏃 Botão CORRER &nbsp;|&nbsp; 🔦 Lanterna</p>
+  <p id="desktop-hint">WASD mover | Mouse olhar | SHIFT correr | F lanterna</p>
+  <button class="btn" id="btn-start">DESCER</button>
+</div>
+
+<!-- TELA DE MORTE -->
+<div class="screen" id="death-screen" style="display:none">
+  <h2>VOCÊ MORREU</h2>
+  <p id="death-reason">Capturado pela criatura.</p>
+  <button class="btn" id="btn-retry">TENTAR DE NOVO</button>
+</div>
+
+<!-- TELA DE VITÓRIA -->
+<div class="screen" id="win-screen" style="display:none">
+  <h2>VOCÊ SOBREVIVEU</h2>
+  <p>As relíquias brilham em suas mãos.<br>
+  A criatura recua para as trevas.<br>
+  Por enquanto.</p>
+  <button class="btn" id="btn-again">MERGULHAR NOVAMENTE</button>
+</div>
+
+<!-- IMPORTMAP THREE.JS -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<!-- ═══════════════════════ JOGO ═══════════════════════ -->
+<script type="module">
+import * as THREE from 'three';
+
+/* ═══════════════════════════════════════════════════════
+   CONFIGURAÇÃO GLOBAL
+═══════════════════════════════════════════════════════ */
+const CONFIG = {
+  worldSize: 220,            // tamanho do mundo jogável
+  fogDensity: 0.055,         // densidade da névoa
+  walkSpeed: 5.5,            // velocidade base
+  runSpeed: 10.5,            // velocidade correndo
+  lookSensitivity: 0.0032,   // sensibilidade do look
+  touchLookSens: 0.0045,     // sensibilidade touch
+  oxyDrain: 1.1,             // dreno de oxigênio por segundo
+  sanDrainBase: 0.35,        // dreno base de sanidade
+  creaturePatrolSpeed: 3.2,
+  creatureChaseSpeed: 6.5,
+  creatureKillDist: 2.2,
+  creatureDetectDist: 26,
+  particleCount: 800,        // partículas marine snow
+};
+
+// Detecta mobile
+const isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+if (!isMobile) document.body.classList.add('is-desktop');
+
+// Limita pixel ratio
+const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+
+/* ═══════════════════════════════════════════════════════
+   ESTADO DO JOGO
+═══════════════════════════════════════════════════════ */
+const state = {
+  running: false,
+  dead: false,
+  won: false,
+  oxygen: 100,
+  sanity: 100,
+  relics: 0,
+  lanternOn: true,
+  running_btn: false,
+  time: 0,
+  bobPhase: 0,
+  creatureState: 'patrol',   // patrol | chase
+  creatureSpeedMul: 1,
+  deathReason: '',
+  audioStarted: false,
+};
+
+/* ═══════════════════════════════════════════════════════
+   CENA THREE.JS
+═══════════════════════════════════════════════════════ */
+const canvas = document.getElementById('game-canvas');
+const renderer = new THREE.WebGLRenderer({
+  canvas, antialias: !isMobile, powerPreference: 'high-performance'
+});
+renderer.setPixelRatio(DPR);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = !isMobile;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x010508);
+scene.fog = new THREE.FogExp2(0x010508, CONFIG.fogDensity);
+
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.1, 200);
+
+// Luz ambiente mínima (quase escuridão total)
+const ambientLight = new THREE.AmbientLight(0x0a1520, 0.35);
+scene.add(ambientLight);
+
+// LANTERNA — SpotLight preso à câmera
+const lantern = new THREE.SpotLight(0xcfe8ff, 28, 42, Math.PI/5.5, 0.45, 1.6);
+lantern.position.set(0, 0, 0);
+lantern.castShadow = !isMobile;
+if (lantern.castShadow) {
+  lantern.shadow.mapSize.set(512, 512);
+  lantern.shadow.camera.near = 0.5;
+  lantern.shadow.camera.far = 45;
+}
+camera.add(lantern);
+camera.add(lantern.target);
+lantern.target.position.set(0, 0, -1);
+scene.add(camera);
+
+// Luz de preenchimento muito fraca da lanterna
+const lanternFill = new THREE.PointLight(0x88bbdd, 2, 8, 2);
+camera.add(lanternFill);
+
+/* ═══════════════════════════════════════════════════════
+   MATERIALES REUTILIZADOS
+═══════════════════════════════════════════════════════ */
+const MAT = {
+  sand:      new THREE.MeshStandardMaterial({ color:0x8a7a55, roughness:0.95, flatShading:true }),
+  rock:      new THREE.MeshStandardMaterial({ color:0x3a4048, roughness:0.9, flatShading:true }),
+  rockDark:  new THREE.MeshStandardMaterial({ color:0x252a30, roughness:0.95, flatShading:true }),
+  wood:      new THREE.MeshStandardMaterial({ color:0x4a3520, roughness:0.85, flatShading:true }),
+  woodDark:  new THREE.MeshStandardMaterial({ color:0x2e2012, roughness:0.9, flatShading:true }),
+  metal:     new THREE.MeshStandardMaterial({ color:0x4a5058, roughness:0.5, metalness:0.7, flatShading:true }),
+  algae:     new THREE.MeshStandardMaterial({ color:0x1a4a2a, roughness:0.9, flatShading:true }),
+  algaeGlow: new THREE.MeshStandardMaterial({ color:0x1a6a3a, emissive:0x0a3a1a, emissiveIntensity:0.5, roughness:0.8 }),
+  coral:     new THREE.MeshStandardMaterial({ color:0x8a3a5a, roughness:0.8, flatShading:true }),
+  coral2:    new THREE.MeshStandardMaterial({ color:0x5a3a8a, roughness:0.8, flatShading:true }),
+  creature:  new THREE.MeshStandardMaterial({ color:0x0a0a12, roughness:0.6, flatShading:true }),
+  eye:       new THREE.MeshStandardMaterial({ color:0xff0000, emissive:0xff2200, emissiveIntensity:2.5 }),
+  relic:     new THREE.MeshStandardMaterial({ color:0xffd700, emissive:0xffaa00, emissiveIntensity:1.8, roughness:0.2, metalness:0.9 }),
+  beacon:    new THREE.MeshStandardMaterial({ color:0x00ffcc, emissive:0x00ffcc, emissiveIntensity:2 }),
+};
+
+/* ═══════════════════════════════════════════════════════
+   TERRENO PROCEDURAL (areia deformada)
+═══════════════════════════════════════════════════════ */
+function noise2D(x, y) {
+  // ruído simples por senos sobrepostos
+  return Math.sin(x*0.08)*Math.cos(y*0.06)*2.2
+       + Math.sin(x*0.15+1.7)*Math.cos(y*0.13+0.4)*1.1
+       + Math.sin(x*0.32+4.2)*Math.cos(y*0.29+2.1)*0.45;
+}
+
+function buildTerrain() {
+  const size = CONFIG.worldSize + 80;
+  const seg = isMobile ? 48 : 72;
+  const geo = new THREE.PlaneGeometry(size, size, seg, seg);
+  geo.rotateX(-Math.PI/2);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    pos.setY(i, noise2D(x, z));
+  }
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, MAT.sand);
+  mesh.receiveShadow = !isMobile;
+  scene.add(mesh);
+  return mesh;
+}
+buildTerrain();
+
+// Função de altura do terreno (para posicionar objetos)
+function terrainHeight(x, z) { return noise2D(x, z); }
+
+/* ═══════════════════════════════════════════════════════
+   ROCHAS
+═══════════════════════════════════════════════════════ */
+const rockGeo = new THREE.DodecahedronGeometry(1, 0);
+const rockPositions = [];
+(function buildRocks() {
+  const count = isMobile ? 30 : 45;
+  for (let i = 0; i < count; i++) {
+    const x = (Math.random()-0.5) * CONFIG.worldSize;
+    const z = (Math.random()-0.5) * CONFIG.worldSize;
+    const s = 0.8 + Math.random()*3.2;
+    const rock = new THREE.Mesh(rockGeo, Math.random()>0.5?MAT.rock:MAT.rockDark);
+    rock.position.set(x, terrainHeight(x,z)+s*0.25, z);
+    rock.scale.set(s, s*(0.6+Math.random()*0.5), s);
+    rock.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+    rock.castShadow = !isMobile;
+    rock.receiveShadow = !isMobile;
+    scene.add(rock);
+    rockPositions.push({x, z, r: s});
+  }
+})();
+
+/* ═══════════════════════════════════════════════════════
+   ALGAS & CORAIS
+═══════════════════════════════════════════════════════ */
+(function buildFlora() {
+  const count = isMobile ? 50 : 80;
+  for (let i = 0; i < count; i++) {
+    const x = (Math.random()-0.5) * CONFIG.worldSize;
+    const z = (Math.random()-0.5) * CONFIG.worldSize;
+    const y = terrainHeight(x, z);
+    const isAlgae = Math.random() > 0.4;
+    if (isAlgae) {
+      // Alga: cone alongado ondulante
+      const h = 1.5 + Math.random()*3;
+      const geo = new THREE.ConeGeometry(0.12+Math.random()*0.15, h, 5);
+      const algae = new THREE.Mesh(geo, Math.random()>0.6?MAT.algaeGlow:MAT.algae);
+      algae.position.set(x, y + h/2, z);
+      algae.rotation.z = (Math.random()-0.5)*0.4;
+      algae.userData.swayPhase = Math.random()*Math.PI*2;
+      algae.userData.isAlgae = true;
+      scene.add(algae);
+      swayObjects.push(algae);
+    } else {
+      // Coral: octaedro achatado em grupos
+      const geo = new THREE.OctahedronGeometry(0.3+Math.random()*0.5, 0);
+      const coral = new THREE.Mesh(geo, Math.random()>0.5?MAT.coral:MAT.coral2);
+      coral.position.set(x, y+0.2, z);
+      coral.scale.y = 0.6;
+      coral.rotation.y = Math.random()*Math.PI;
+      scene.add(coral);
+    }
+  }
+})();
+
+/* ═══════════════════════════════════════════════════════
+   DESTROÇOS DO NAUFRÁGIO
+═══════════════════════════════════════════════════════ */
+const wreckGroup = new THREE.Group();
+(function buildWreck() {
+  // Casco — cilindro achatado e inclinado
+  const hullGeo = new THREE.CylinderGeometry(2.2, 2.8, 14, 8, 1, true);
+  const hull = new THREE.Mesh(hullGeo, MAT.woodDark);
+  hull.rotation.z = Math.PI/2.3;
+  hull.rotation.y = 0.4;
+  hull.position.set(0, 1.2, 0);
+  hull.castShadow = !isMobile;
+  wreckGroup.add(hull);
+
+  // Mastro quebrado
+  const mastGeo = new THREE.CylinderGeometry(0.15, 0.25, 9, 6);
+  const mast = new THREE.Mesh(mastGeo, MAT.wood);
+  mast.position.set(2, 3.5, 1);
+  mast.rotation.z = 0.7;
+  mast.rotation.x = 0.15;
+  mast.castShadow = !isMobile;
+  wreckGroup.add(mast);
+
+  // Tábuas espalhadas
+  for (let i = 0; i < 10; i++) {
+    const plank = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4+Math.random()*0.4, 0.08, 2+Math.random()*2),
+      MAT.wood
+    );
+    plank.position.set(
+      (Math.random()-0.5)*16,
+      0.3+Math.random()*0.8,
+      (Math.random()-0.5)*16
+    );
+    plank.rotation.set(
+      (Math.random()-0.5)*0.6,
+      Math.random()*Math.PI,
+      (Math.random()-0.5)*0.4
+    );
+    plank.castShadow = !isMobile;
+    wreckGroup.add(plank);
+  }
+
+  // Destroços metálicos (âncora, canhão)
+  const anchor = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.18, 6, 8), MAT.metal);
+  anchor.position.set(-4, 0.8, 3);
+  anchor.rotation.x = Math.PI/3;
+  wreckGroup.add(anchor);
+
+  wreckGroup.position.set(30, terrainHeight(30, -20), -20);
+  scene.add(wreckGroup);
+})();
+
+// Segundo naufrágio menor (longe)
+(function buildWreck2() {
+  const g = new THREE.Group();
+  const hull = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 2, 8, 7, 1, true), MAT.woodDark);
+  hull.rotation.z = Math.PI/1.8;
+  hull.position.y = 0.8;
+  g.add(hull);
+  for (let i = 0; i < 5; i++) {
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 1.5), MAT.wood);
+    plank.position.set((Math.random()-0.5)*8, 0.2, (Math.random()-0.5)*8);
+    plank.rotation.y = Math.random()*Math.PI;
+    g.add(plank);
+  }
+  g.position.set(-45, terrainHeight(-45, 40), 40);
+  scene.add(g);
+})();
+
+/* ═══════════════════════════════════════════════════════
+   MARINE SNOW — PARTÍCULAS
+═══════════════════════════════════════════════════════ */
+let snowPoints;
+(function buildSnow() {
+  const count = CONFIG.particleCount;
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(count*3);
+  const speeds = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    positions[i*3]   = (Math.random()-0.5)*CONFIG.worldSize;
+    positions[i*3+1] = Math.random()*30 - 5;
+    positions[i*3+2] = (Math.random()-0.5)*CONFIG.worldSize;
+    speeds[i] = 0.15 + Math.random()*0.35;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.userData.speeds = speeds;
+  const mat = new THREE.PointsMaterial({
+    color:0x88aabb, size:0.12, transparent:true, opacity:0.55,
+    sizeAttenuation:true, depthWrite:false
+  });
+  snowPoints = new THREE.Points(geo, mat);
+  scene.add(snowPoints);
+})();
+
+/* ═══════════════════════════════════════════════════════
+   RELÍQUIAS (3 itens coletáveis)
+═══════════════════════════════════════════════════════ */
+const relics = [];
+const relicPositions = [
+  { x: 30, z: -20 },   // dentro do naufrágio principal
+  { x: -45, z: 40 },   // no segundo naufrágio
+  { x: 10, z: 55 },    // campo de rochas
+];
+(function buildRelics() {
+  const geo = new THREE.OctahedronGeometry(0.45, 0);
+  relicPositions.forEach((p, idx) => {
+    const relic = new THREE.Mesh(geo, MAT.relic);
+    const y = terrainHeight(p.x, p.z) + 1.2;
+    relic.position.set(p.x, y, p.z);
+    relic.userData.baseY = y;
+    relic.userData.phase = idx * 2.1;
+    relic.userData.collected = false;
+    // luz pontual fraca em cada relíquia
+    const glow = new THREE.PointLight(0xffaa00, 3, 7, 2);
+    relic.add(glow);
+    scene.add(relic);
+    relics.push(relic);
+  });
+})();
+
+/* ═══════════════════════════════════════════════════════
+   PONTO DE PARTIDA / BEACON DE FUGA
+═══════════════════════════════════════════════════════ */
+const startPos = new THREE.Vector3(0, 0, 0);
+let beacon;
+(function buildBeacon() {
+  const y = terrainHeight(0, 0);
+  startPos.set(0, y + 1.7, 0);
+  beacon = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.3, 0.5, 2.5, 6),
+    MAT.beacon
+  );
+  beacon.position.set(0, y+1.25, 0);
+  scene.add(beacon);
+  const beaconLight = new THREE.PointLight(0x00ffcc, 4, 12, 2);
+  beaconLight.position.set(0, y+3, 0);
+  beacon.add(beaconLight);
+  beacon.userData.light = beaconLight;
+})();
+
+/* ═══════════════════════════════════════════════════════
+   A CRIATURA ABISMAL
+═══════════════════════════════════════════════════════ */
+const creature = new THREE.Group();
+const creatureEyes = [];
+let creatureTarget = new THREE.Vector3();
+let creatureWaypoint = new THREE.Vector3();
+(function buildCreature() {
+  // Corpo humanóide — cápsula escura
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.7, 1.6, 4, 8), MAT.creature);
+  body.position.y = 1.8;
+  creature.add(body);
+
+  // Cabeça alongada
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.1, 6), MAT.creature);
+  head.position.y = 3.2;
+  head.rotation.x = Math.PI;
+  creature.add(head);
+
+  // Braços tentáculos — cones curvados
+  for (let side = -1; side <= 1; side += 2) {
+    for (let i = 0; i < 3; i++) {
+      const tent = new THREE.Mesh(new THREE.ConeGeometry(0.12, 2.2+i*0.4, 5), MAT.creature);
+      tent.position.set(side*(0.7+i*0.15), 2.2-i*0.3, 0);
+      tent.rotation.z = side*(0.9+i*0.25);
+      tent.userData.swayPhase = i*1.3 + (side>0?0:Math.PI);
+      tent.userData.isTentacle = true;
+      creature.add(tent);
+      tentacles.push(tent);
+    }
+  }
+
+  // Olhos vermelhos brilhantes (4 olhos)
+  const eyeGeo = new THREE.SphereGeometry(0.09, 6, 6);
+  const eyeOffsets = [
+    [-0.18, 3.15, 0.32], [0.18, 3.15, 0.32],
+    [-0.1, 2.95, 0.38],  [0.1, 2.95, 0.38],
+  ];
+  eyeOffsets.forEach(o => {
+    const eye = new THREE.Mesh(eyeGeo, MAT.eye.clone());
+    eye.position.set(o[0], o[1], o[2]);
+    creature.add(eye);
+    creatureEyes.push(eye);
+  });
+
+  // Luz vermelha sutil dos olhos
+  const eyeLight = new THREE.PointLight(0xff2200, 1.5, 6, 2);
+  eyeLight.position.set(0, 3, 0.5);
+  creature.add(eyeLight);
+  creature.userData.eyeLight = eyeLight;
+
+  creature.position.set(60, 0, 60);
+  scene.add(creature);
+})();
+const tentacles = [];
+
+function newWaypoint() {
+  creatureWaypoint.set(
+    (Math.random()-0.5)*CONFIG.worldSize*0.8,
+    0,
+    (Math.random()-0.5)*CONFIG.worldSize*0.8
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   ENTRADA — POSIÇÃO INICIAL
+═══════════════════════════════════════════════════════ */
+camera.position.copy(startPos);
+let yaw = 0, pitch = 0;
+
+/* ═══════════════════════════════════════════════════════
+   ÁUDIO PROCEDURAL (Web Audio API)
+═══════════════════════════════════════════════════════ */
+let audioCtx = null;
+let masterGain, droneOsc, droneGain, droneLFO, droneLFOGain;
+let heartbeatTimer = null, whisperTimer = null;
+
+function initAudio() {
+  if (state.audioStarted) return;
+  state.audioStarted = true;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.6;
+  masterGain.connect(audioCtx.destination);
+
+  // ── DRONE AMBIENTE 42Hz com LFO ──
+  droneOsc = audioCtx.createOscillator();
+  droneOsc.type = 'sine';
+  droneOsc.frequency.value = 42;
+  droneGain = audioCtx.createGain();
+  droneGain.gain.value = 0.12;
+  droneLFO = audioCtx.createOscillator();
+  droneLFO.type = 'sine';
+  droneLFO.frequency.value = 0.13;
+  droneLFOGain = audioCtx.createGain();
+  droneLFOGain.gain.value = 0.05;
+  droneLFO.connect(droneLFOGain);
+  droneLFOGain.connect(droneGain.gain);
+  droneOsc.connect(droneGain);
+  droneGain.connect(masterGain);
+  droneOsc.start();
+  droneLFO.start();
+
+  // Segundo drone grave desafinado (tensão)
+  const drone2 = audioCtx.createOscillator();
+  drone2.type = 'triangle';
+  drone2.frequency.value = 43.7;
+  const dg2 = audioCtx.createGain();
+  dg2.gain.value = 0.04;
+  drone2.connect(dg2); dg2.connect(masterGain);
+  drone2.start();
+}
+
+function playWhisper() {
+  if (!audioCtx || state.dead) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sawtooth';
+  const g = audioCtx.createGain();
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'bandpass'; f.frequency.value = 800+Math.random()*1200; f.Q.value = 8;
+  osc.frequency.setValueAtTime(200+Math.random()*300, t);
+  osc.frequency.exponentialRampToValueAtTime(80+Math.random()*100, t+0.8);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.06+Math.random()*0.05, t+0.15);
+  g.gain.exponentialRampToValueAtTime(0.001, t+0.9);
+  osc.connect(f); f.connect(g); g.connect(masterGain);
+  osc.start(t); osc.stop(t+1);
+}
+
+function playHeartbeat() {
+  if (!audioCtx || state.dead) return;
+  const t = audioCtx.currentTime;
+  // dois batimentos: lub-dub
+  [0, 0.28].forEach((offset, i) => {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    const g = audioCtx.createGain();
+    osc.frequency.setValueAtTime(65, t+offset);
+    osc.frequency.exponentialRampToValueAtTime(35, t+offset+0.12);
+    g.gain.setValueAtTime(0, t+offset);
+    g.gain.linearRampToValueAtTime(i===0?0.35:0.22, t+offset+0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t+offset+0.22);
+    osc.connect(g); g.connect(masterGain);
+    osc.start(t+offset); osc.stop(t+offset+0.3);
+  });
+}
+
+function playCollect() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  osc.type = 'triangle';
+  const g = audioCtx.createGain();
+  osc.frequency.setValueAtTime(440, t);
+  osc.frequency.exponentialRampToValueAtTime(880, t+0.25);
+  g.gain.setValueAtTime(0.25, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t+0.6);
+  osc.connect(g); g.connect(masterGain);
+  osc.start(t); osc.stop(t+0.7);
+}
+
+function playJumpscare() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  osc.type = 'square';
+  const g = audioCtx.createGain();
+  osc.frequency.setValueAtTime(900, t);
+  osc.frequency.exponentialRampToValueAtTime(80, t+0.7);
+  g.gain.setValueAtTime(0.5, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t+0.8);
+  osc.connect(g); g.connect(masterGain);
+  osc.start(t); osc.stop(t+0.9);
+  // ruído branco agudo
+  const bufferSize = audioCtx.sampleRate * 0.5;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = (Math.random()*2-1)*0.4;
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = buffer;
+  const ng = audioCtx.createGain();
+  ng.gain.setValueAtTime(0.4, t);
+  ng.gain.exponentialRampToValueAtTime(0.001, t+0.5);
+  noise.connect(ng); ng.connect(masterGain);
+  noise.start(t);
+}
+
+function startHeartbeatLoop() {
+  if (heartbeatTimer) return;
+  heartbeatTimer = setInterval(playHeartbeat, 850);
+}
+function stopHeartbeatLoop() {
+  clearInterval(heartbeatTimer); heartbeatTimer = null;
+}
+function startWhisperLoop() {
+  if (whisperTimer) return;
+  const loop = () => {
+    playWhisper();
+    whisperTimer = setTimeout(loop, 1200+Math.random()*2500);
+  };
+  loop();
+}
+function stopWhisperLoop() {
+  clearTimeout(whisperTimer); whisperTimer = null;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CONTROLES — TECLADO & MOUSE (desktop)
+═══════════════════════════════════════════════════════ */
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyF') toggleLantern();
+});
+document.addEventListener('keyup', e => keys[e.code] = false);
+
+let pointerLocked = false;
+document.addEventListener('click', () => {
+  if (state.running && !isMobile && !pointerLocked) {
+    canvas.requestPointerLock();
+  }
+});
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === canvas;
+});
+document.addEventListener('mousemove', e => {
+  if (!pointerLocked || !state.running) return;
+  yaw   -= e.movementX * CONFIG.lookSensitivity;
+  pitch -= e.movementY * CONFIG.lookSensitivity;
+  pitch = Math.max(-1.35, Math.min(1.35, pitch));
+});
+
+/* ═══════════════════════════════════════════════════════
+   CONTROLES — TOUCH (mobile)
+═══════════════════════════════════════════════════════ */
+const joyZone = document.getElementById('joystick-zone');
+const joyBase = document.getElementById('joystick-base');
+const joyKnob = document.getElementById('joystick-knob');
+const lookZone = document.getElementById('look-zone');
+const btnRun = document.getElementById('btn-run');
+const btnLantern = document.getElementById('btn-lantern');
+
+let joyActive = false, joyId = null;
+let joyCenter = {x:0, y:0};
+let joyVec = {x:0, y:0};
+let lookId = null, lookLast = {x:0, y:0};
+
+joyZone.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  joyId = t.identifier;
+  joyActive = true;
+  joyCenter = {x: t.clientX, y: t.clientY};
+  joyBase.style.display = 'block';
+  joyBase.style.left = (t.clientX-55)+'px';
+  joyBase.style.top  = (t.clientY-55)+'px';
+  joyKnob.style.display = 'block';
+  joyKnob.style.left = (t.clientX-24)+'px';
+  joyKnob.style.top  = (t.clientY-24)+'px';
+}, {passive:false});
+
+joyZone.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier !== joyId) continue;
+    let dx = t.clientX - joyCenter.x;
+    let dy = t.clientY - joyCenter.y;
+    const dist = Math.hypot(dx, dy);
+    const maxR = 50;
+    if (dist > maxR) { dx = dx/dist*maxR; dy = dy/dist*maxR; }
+    joyVec.x = dx/maxR; joyVec.y = dy/maxR;
+    joyKnob.style.left = (joyCenter.x+dx-24)+'px';
+    joyKnob.style.top  = (joyCenter.y+dy-24)+'px';
+  }
+}, {passive:false});
+
+function joyEnd(e) {
+  for (const t of e.changedTouches) {
+    if (t.identifier !== joyId) continue;
+    joyActive = false; joyId = null;
+    joyVec.x = 0; joyVec.y = 0;
+    joyBase.style.display = 'none';
+    joyKnob.style.display = 'none';
+  }
+}
+joyZone.addEventListener('touchend', joyEnd);
+joyZone.addEventListener('touchcancel', joyEnd);
+
+lookZone.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  lookId = t.identifier;
+  lookLast = {x: t.clientX, y: t.clientY};
+}, {passive:false});
+
+lookZone.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier !== lookId) continue;
+    const dx = t.clientX - lookLast.x;
+    const dy = t.clientY - lookLast.y;
+    yaw   -= dx * CONFIG.touchLookSens;
+    pitch -= dy * CONFIG.touchLookSens;
+    pitch = Math.max(-1.35, Math.min(1.35, pitch));
+    lookLast = {x: t.clientX, y: t.clientY};
+  }
+}, {passive:false});
+
+function lookEnd(e) {
+  for (const t of e.changedTouches) {
+    if (t.identifier === lookId) lookId = null;
+  }
+}
+lookZone.addEventListener('touchend', lookEnd);
+lookZone.addEventListener('touchcancel', lookEnd);
+
+btnRun.addEventListener('touchstart', e => { e.preventDefault(); state.running_btn = true; }, {passive:false});
+btnRun.addEventListener('touchend',   e => { e.preventDefault(); state.running_btn = false; }, {passive:false});
+btnRun.addEventListener('mousedown', () => state.running_btn = true);
+btnRun.addEventListener('mouseup',   () => state.running_btn = false);
+
+btnLantern.addEventListener('touchstart', e => { e.preventDefault(); toggleLantern(); }, {passive:false});
+btnLantern.addEventListener('click', () => { if(!isMobile) toggleLantern(); });
+
+function toggleLantern() {
+  state.lanternOn = !state.lanternOn;
+  lantern.visible = state.lanternOn;
+  lanternFill.visible = state.lanternOn;
+  btnLantern.classList.toggle('off', !state.lanternOn);
+}
+
+// Bloqueia gestos de zoom/scroll no documento inteiro
+document.addEventListener('touchmove', e => e.preventDefault(), {passive:false});
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+/* ═══════════════════════════════════════════════════════
+   UI HELPERS
+═══════════════════════════════════════════════════════ */
+const oxyFill = document.getElementById('oxy-fill');
+const sanFill = document.getElementById('san-fill');
+const relicCounter = document.getElementById('relic-counter');
+const vignette = document.getElementById('vignette');
+const flashEl = document.getElementById('flash');
+const dirIndicator = document.getElementById('dir-indicator');
+
+function updateHUD() {
+  oxyFill.style.width = state.oxygen + '%';
+  sanFill.style.width = state.sanity + '%';
+  relicCounter.textContent = `◈ RELÍQUIAS: ${state.relics}/3`;
+  // vinheta escurece com sanidade
+  const darkness = 0.45 + (1 - state.sanity/100) * 0.55;
+  vignette.style.background = `radial-gradient(ellipse at center, transparent ${20-(1-state.sanity/100)*15}%, rgba(0,0,0,${darkness}) 100%)`;
+}
+
+function doFlash(color, duration=120) {
+  flashEl.style.background = color;
+  flashEl.style.opacity = '0.85';
+  setTimeout(() => flashEl.style.opacity = '0', duration);
+}
+
+/* ═══════════════════════════════════════════════════════
+   GAME OVER / WIN
+═══════════════════════════════════════════════════════ */
+function gameOver(reason) {
+  if (state.dead || state.won) return;
+  state.dead = true;
+  state.deathReason = reason;
+  stopHeartbeatLoop(); stopWhisperLoop();
+  playJumpscare();
+  doFlash('#ff0000', 400);
+  setTimeout(() => {
+    document.getElementById('death-reason').textContent = reason;
+    document.getElementById('death-screen').style.display = 'flex';
+    document.getElementById('hud').style.display = 'none';
+  }, 900);
+}
+
+function winGame() {
+  if (state.dead || state.won) return;
+  state.won = true;
+  stopHeartbeatLoop(); stopWhisperLoop();
+  doFlash('#ffffff', 300);
+  playCollect();
+  setTimeout(() => {
+    document.getElementById('win-screen').style.display = 'flex';
+    document.getElementById('hud').style.display = 'none';
+  }, 700);
+}
+
+function resetGame() {
+  state.running = true;
+  state.dead = false; state.won = false;
+  state.oxygen = 100; state.sanity = 100;
+  state.relics = 0; state.creatureSpeedMul = 1;
+  state.creatureState = 'patrol';
+  camera.position.copy(startPos);
+  yaw = 0; pitch = 0;
+  creature.position.set(60, terrainHeight(60,60), 60);
+  newWaypoint();
+  relics.forEach(r => { r.userData.collected = false; r.visible = true; });
+  document.getElementById('death-screen').style.display = 'none';
+  document.getElementById('win-screen').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+  updateHUD();
+  if (state.audioStarted) startWhisperLoop();
+}
+
+/* ═══════════════════════════════════════════════════════
+   BOTÕES DE TELA
+═══════════════════════════════════════════════════════ */
+document.getElementById('btn-start').addEventListener('click', () => {
+  initAudio();
+  document.getElementById('start-screen').style.display = 'none';
+  resetGame();
+});
+document.getElementById('btn-retry').addEventListener('click', () => { resetGame(); });
+document.getElementById('btn-again').addEventListener('click', () => { resetGame(); });
+
+/* ═══════════════════════════════════════════════════════
+   LOOP PRINCIPAL
+═══════════════════════════════════════════════════════ */
+const clock = new THREE.Clock();
+const forward = new THREE.Vector3();
+const right = new THREE.Vector3();
+const moveVec = new THREE.Vector3();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  state.time += dt;
+
+  if (state.running && !state.dead && !state.won) {
+    /* ─── MOVIMENTO DO JOGADOR ─── */
+    let mx = 0, mz = 0;
+    if (isMobile) { mx = joyVec.x; mz = joyVec.y; }
+    else {
+      if (keys['KeyW'] || keys['ArrowUp'])    mz -= 1;
+      if (keys['KeyS'] || keys['ArrowDown'])  mz += 1;
+      if (keys['KeyA'] || keys['ArrowLeft'])  mx -= 1;
+      if (keys['KeyD'] || keys['ArrowRight']) mx += 1;
+    }
+    const isRunning = state.running_btn || keys['ShiftLeft'] || keys['ShiftRight'];
+    const speed = isRunning ? CONFIG.runSpeed : CONFIG.walkSpeed;
+
+    // Direção baseada no yaw
+    forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+    right.set(Math.cos(yaw), 0, -Math.sin(yaw));
+    moveVec.set(0,0,0).addScaledVector(forward, -mz).addScaledVector(right, mx);
+    if (moveVec.lengthSq() > 0) moveVec.normalize();
+
+    camera.position.addScaledVector(moveVec, speed * dt);
+
+    // Limita mundo
+    const half = CONFIG.worldSize/2;
+    camera.position.x = Math.max(-half, Math.min(half, camera.position.x));
+    camera.position.z = Math.max(-half, Math.min(half, camera.position.z));
+
+    // Altura do terreno + flutuação + bobbing
+    const groundY = terrainHeight(camera.position.x, camera.position.z) + 1.7;
+    const moving = moveVec.lengthSq() > 0;
+    if (moving) state.bobPhase += dt * (isRunning ? 11 : 7);
+    const bob = Math.sin(state.bobPhase) * (moving ? (isRunning ? 0.14 : 0.07) : 0.03);
+    const floatY = Math.sin(state.time * 0.8) * 0.12;
+    camera.position.y += ((groundY + bob + floatY) - camera.position.y) * 0.12;
+
+    // Aplica rotação da câmera
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
+
+    /* ─── DISTÂNCIA À CRIATURA ─── */
+    const distToCreature = camera.position.distanceTo(creature.position);
+
+    /* ─── TREMOR DE CÂMERA (criatura perto) ─── */
+    if (distToCreature < 18) {
+      const intensity = (1 - distToCreature/18) * 0.045;
+      camera.rotation.x += (Math.random()-0.5)*intensity;
+      camera.rotation.y += (Math.random()-0.5)*intensity;
+      camera.rotation.z = (Math.random()-0.5)*intensity*0.6;
+    } else {
+      camera.rotation.z *= 0.9;
+    }
+
+    /* ─── OXIGÊNIO ─── */
+    let oxyDrain = CONFIG.oxyDrain;
+    if (isRunning) oxyDrain *= 1.6;
+    if (distToCreature < 12) oxyDrain *= 1.8;
+    state.oxygen -= oxyDrain * dt;
+    if (state.oxygen <= 0) {
+      state.oxygen = 0;
+      gameOver('Seu oxigênio acabou. As trevas o engoliram.');
+    }
+
+    /* ─── SANIDADE ─── */
+    let sanDrain = CONFIG.sanDrainBase;
+    if (distToCreature < 20) sanDrain += (1 - distToCreature/20) * 2.2;
+    if (!state.lanternOn) sanDrain += 0.4;
+    state.sanity -= sanDrain * dt;
+    if (state.sanity < 50 && !whisperTimer) startWhisperLoop();
+    if (state.sanity >= 50 && whisperTimer) stopWhisperLoop();
+    if (state.sanity <= 0) {
+      state.sanity = 0;
+      gameOver('Sua mente se fragmentou no escuro.');
+    }
+
+    /* ─── CRIATURA — IA ─── */
+    const detectDist = CONFIG.creatureDetectDist;
+    if (distToCreature < detectDist && state.creatureState !== 'chase') {
+      state.creatureState = 'chase';
+      startHeartbeatLoop();
+      doFlash('rgba(255,0,0,0.3)', 200);
+    } else if (distToCreature > detectDist * 1.4 && state.creatureState === 'chase') {
+      state.creatureState = 'patrol';
+      stopHeartbeatLoop();
+      newWaypoint();
+    }
+
+    let cSpeed;
+    if (state.creatureState === 'chase') {
+      cSpeed = CONFIG.creatureChaseSpeed * state.creatureSpeedMul;
+      creatureTarget.copy(camera.position);
+    } else {
+      cSpeed = CONFIG.creaturePatrolSpeed;
+      if (creature.position.distanceTo(creatureWaypoint) < 4) newWaypoint();
+      creatureTarget.copy(creatureWaypoint);
+    }
+
+    const cDir = new THREE.Vector3().subVectors(creatureTarget, creature.position);
+    cDir.y = 0;
+    if (cDir.lengthSq() > 0.01) {
+      cDir.normalize();
+      creature.position.addScaledVector(cDir, cSpeed * dt);
+      creature.rotation.y = Math.atan2(cDir.x, cDir.z);
+    }
+    // altura da criatura
+    creature.position.y = terrainHeight(creature.position.x, creature.position.z)
+                        + Math.sin(state.time * 1.3) * 0.3;
+
+    // Anima tentáculos
+    tentacles.forEach(t => {
+      t.rotation.x = Math.sin(state.time*2 + t.userData.swayPhase) * 0.25;
+    });
+
+    // Olhos pulsando
+    const eyePulse = 1.5 + Math.sin(state.time * (state.creatureState==='chase' ? 9 : 3)) * 1.2;
+    creatureEyes.forEach(e => e.material.emissiveIntensity = eyePulse);
+    creature.userData.eyeLight.intensity = eyePulse * 0.8;
+
+    // Mata o jogador
+    if (distToCreature < CONFIG.creatureKillDist) {
+      gameOver('A criatura o alcançou. Seu corpo nunca será encontrado.');
+    }
+
+    /* ─── COLETA DE RELÍQUIAS ─── */
+    relics.forEach(r => {
+      if (r.userData.collected) return;
+      r.rotation.y += dt * 1.5;
+      r.position.y = r.userData.baseY + Math.sin(state.time*2 + r.userData.phase)*0.25;
+      if (camera.position.distanceTo(r.position) < 2.2) {
+        r.userData.collected = true;
+        r.visible = false;
+        state.relics++;
+        state.creatureSpeedMul += 0.35;
+        playCollect();
+        doFlash('rgba(255,215,0,0.35)', 250);
+        updateHUD();
+        if (state.relics >= 3) {
+          dirIndicator.style.display = 'block';
+        }
+      }
+    });
+
+    /* ─── VITÓRIA — voltar ao beacon ─── */
+    if (state.relics >= 3) {
+      const distToStart = camera.position.distanceTo(startPos);
+      // Indicador de direção
+      const toStart = new THREE.Vector3().subVectors(startPos, camera.position);
+      const startAngle = Math.atan2(toStart.x, -toStart.z);
+      let rel = startAngle - yaw;
+      while (rel > Math.PI) rel -= Math.PI*2;
+      while (rel < -Math.PI) rel += Math.PI*2;
+      dirIndicator.style.transform = `translate(-50%,-50%) rotate(${rel}rad)`;
+      if (distToStart < 4) winGame();
+    }
+
+    /* ─── BEACON pulsando ─── */
+    beacon.userData.light.intensity = 3 + Math.sin(state.time*3)*2;
+    MAT.beacon.emissiveIntensity = 1.5 + Math.sin(state.time*3)*1;
+
+    updateHUD();
+  }
+
+  /* ─── MARINE SNOW animação ─── */
+  const snowPos = snowPoints.geometry.attributes.position;
+  const speeds = snowPoints.geometry.userData.speeds;
+  for (let i = 0; i < speeds.length; i++) {
+    let y = snowPos.getY(i) - speeds[i] * dt;
+    if (y < -3) y = 28;
+    snowPos.setY(i, y);
+    snowPos.setX(i, snowPos.getX(i) + Math.sin(state.time*0.5 + i)*0.002);
+  }
+  snowPos.needsUpdate = true;
+
+  /* ─── ALGAS balançando ─── */
+  swayObjects.forEach(a => {
+    a.rotation.z = Math.sin(state.time*1.2 + a.userData.swayPhase) * 0.18;
+  });
+
+  renderer.render(scene, camera);
+}
+
+/* ═══════════════════════════════════════════════════════
+   RESIZE
+═══════════════════════════════════════════════════════ */
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ═══════════════════════════════════════════════════════
+   START
+═══════════════════════════════════════════════════════ */
+document.getElementById('loading').style.display = 'none';
+newWaypoint();
+animate();
+
+</script>
+</body>
+</html>
